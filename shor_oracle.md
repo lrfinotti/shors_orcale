@@ -18,6 +18,9 @@ from qiskit.quantum_info import Statevector, Operator
 from qiskit.synthesis.qft import synth_qft_full
 import pylatexenc
 
+# for testing
+from random import randint
+
 import numpy as np
 # make numpy output look better
 np_version = int(np.version.version.split(".")[0])
@@ -34,13 +37,13 @@ if np_version >= 2:
 The goal here is to implement a [Qiskit](https://www.ibm.com/quantum/qiskit) function that takes two positive integers $a$ and $N$ and outputs the oracle
 
 $$
-U_a \left| c \right\rangle_1 \left| x \right\rangle = \begin{cases}
-  \left| c \right\rangle_1 \left| ax \; \mathrm{mod} N \right\rangle, & \text{if $x=1$ and $y <N$}, \\
-  \left| c \right\rangle_1 \left| x \right\rangle, & \text{otherwise.}
+U_a \left| c \right\rangle_1 \left| x \right\rangle_n = \begin{cases}
+  \left| c \right\rangle_1 \left| ax \; \mathrm{mod} N \right\rangle_n, & \text{if $c=1$ and $x <N$}, \\
+  \left| c \right\rangle_1 \left| x \right\rangle_n, & \text{otherwise,}
 \end{cases}
 $$
 
-where $n = \lceil \log_2(N) \rceil$.  The construction may only use any number of ancillas, $1$-qubit gates, multi-controlled phase ($MC P$) and $X$ ($MC X$) gates with any number of controls, and the built-in version of the Quantum Fourier Transform (and its inverse). No classical bit and measurements allowed.
+where $n = \lceil \log_2(N) \rceil$.  The construction may only use any number of ancillas, $1$-qubit gates, multi-controlled phase ($MC P$) and $X$ ($MC X$) gates with any number of controls, and the Qiskit's built-in version of the Quantum Fourier Transform (and its inverse). No classical bit and measurements allowed.
 
 We follow Beauregard's [Circuit for Shor’s algorithm using $2n+3$ qubits](https://arxiv.org/pdf/quant-ph/0205095) construction.
 
@@ -149,7 +152,7 @@ synth_qft_full(num_qubits=3, inverse=True).draw("mpl")
 
 ## Draper Adder Gate
 
-Below we implement [Draper's Adder circuit](https://arxiv.org/abs/quant-ph/0008033):
+Below we implement [Draper's Adder circuit](https://arxiv.org/abs/quant-ph/0008033).  (**Credit:** The code was given on a discussion session notebook for the [Erdős Institute](https://www.erdosinstitute.org/) [Fall 2025 Quantum Computing Bootcamp](https://www.erdosinstitute.org/programs/fall-2025/quantum-computing-boot-camp)).
 
 ```{code-cell} ipython3
 def draper_adder(k, n):
@@ -178,7 +181,7 @@ def draper_adder(k, n):
     return draper_adder_circuit
 ```
 
-Testing:
+Representation for $k=n=3$:
 
 ```{code-cell} ipython3
 draper_adder(3, 3).draw("mpl")
@@ -202,106 +205,6 @@ psi = Statevector(set_state(a, n).compose(draper_adder(k, n)))
 state_to_int(psi) == a + k
 ```
 
----
-
-+++
-
-# REMOVE!!!
-
-+++
-
-Alternatively, use qiskit's [DraperQFTAdder](https://quantum.cloud.ibm.com/docs/en/api/qiskit/qiskit.circuit.library.DraperQFTAdder):  (**HOW?**)
-
-```{code-cell} ipython3
-from qiskit.circuit.library import DraperQFTAdder
-```
-
-```{code-cell} ipython3
-def a_b_adder(a, b, n):
-    # adder = QuantumCircuit(2 * n)
-    # adder.compose(quantum_fourier_transform(2 * n), inplace=True)
-    # adder.compose(DraperQFTAdder(n), inplace=True)
-    # adder.compose(inverse_quantum_fourier_transform(2 * n), inplace=True)
-
-    quantum_register_a = QuantumRegister(size=n, name="a")
-    quantum_register_b = QuantumRegister(size=n, name="b")
-
-    test_adder_a_plus_b = QuantumCircuit(
-        quantum_register_a, quantum_register_b, name=f"{a} + {b}"
-    )
-
-    a_gate = set_state(a, n).to_gate(label=f"set {a}")
-    b_gate = set_state(b, n).to_gate(label=f"set {b}")
-
-    test_adder_a_plus_b.compose(a_gate, quantum_register_a, inplace=True)
-    test_adder_a_plus_b.compose(b_gate, quantum_register_b, inplace=True)
-    test_adder_a_plus_b.compose(synth_qft_full(n), quantum_register_b, inplace=True)
-    test_adder_a_plus_b.compose(DraperQFTAdder(n), inplace=True)
-    test_adder_a_plus_b.compose(synth_qft_full(n, inverse=True), quantum_register_b, inplace=True)
-    return test_adder_a_plus_b
-
-def test_adder(a, b, n):
-    test_adder_a_plus_b = a_b_adder(a, b, n)
-    psi = Statevector(test_adder_a_plus_b)
-    return np.round(psi.probabilities(), 8)
-```
-
-```{code-cell} ipython3
-a_b_adder(0, 1, 2).draw("mpl")
-```
-
-```{code-cell} ipython3
-test_adder(0, 0, 2)
-```
-
-```{code-cell} ipython3
-test_adder(1, 0, 2)
-```
-
-```{code-cell} ipython3
-test_adder(0, 1, 2)
-```
-
-```{code-cell} ipython3
-test_adder(2, 0, 2)
-```
-
-```{code-cell} ipython3
-test_adder(1, 1, 2)
-```
-
-```{code-cell} ipython3
-test_adder(0, 2, 2)
-```
-
-```{code-cell} ipython3
-test_adder(2, 3, 3)
-```
-
-```{code-cell} ipython3
-test_adder(1, 0, 3)
-```
-
-```{code-cell} ipython3
-test_adder(0, 1, 3)
-```
-
-```{code-cell} ipython3
-test_adder(2, 0, 3)
-```
-
-```{code-cell} ipython3
-test_adder(1, 1, 3)
-```
-
-```{code-cell} ipython3
-test_adder(0, 2, 3)
-```
-
----
-
-+++
-
 ## Modular Adder Gate
 
 +++
@@ -316,19 +219,19 @@ $$
 $$
 where $n = \lceil \log_2(N) \rceil$.
 
-For future use, we need to control qubits and we will perform computations using $n+1$ qubits instead of $n$, so that we can detect when $a + b \geq N$.  An extra ancilla with one qubit is also used.
+For future use, we need two control qubits and we will perform computations using $n+1$ qubits instead of $n$, so that we can detect when $a + b \geq N$.  An extra ancilla with one qubit is also used.
 
-To state precisely:
-
-+++
-
-**Lemma:** If $0 < x, N < 2^{n}$, then $x \geq N$ if and only if $(x - N) \; \mathrm{mod} \; 2^{n+1} < 2^n$, i.e., the most significant digit of $(x - N) \; \mathrm{mod} \; 2^{n+1}$ is zero.
+Here is the main idea for checking if $a+b \geq N$:
 
 +++
 
-*Proof:* If $x \geq N$, then  $(x - N) \; \mathrm{mod} \; 2^{n+1} = x - N$  and $0 \geq x - N < x < 2^n$.
+**Lemma:** If $x$ and $N$ are integers in $\{0, 1, \ldots 2^n\}$, with $N \neq 0$, then $x \geq N$ if and only if $(x - N) \; \mathrm{mod} \; 2^{n+1} < 2^n$, i.e., the most significant digit of $(x - N) \; \mathrm{mod} \; 2^{n+1}$ is zero.
 
-If $x > N$, then $(x - N) \; \mathrm{mod} \; 2^{n+1} = 2^{n+1} - x + N \geq 2^{n+1} - 2^n + 0 = 2^n$. $\square$
++++
+
+*Proof:* If $x \geq N$, then $0 \leq x - N \leq 2^n - 1$, i.e., $(x - N) \; \mathrm{mod} \; 2^{n+1} = x - N < 2^n$.
+
+If $x > N$, then $2^{n+1} - (x - N) = 2^{n+1} - x + N \geq 2^{n+1} - 2^n + 0 = 2^n$ and $2^{n+1} - (x - N) > 2^{n+1} - 0 = 2^{n+1}$ .  Hence, $(x - N) \; \mathrm{mod} \; 2^{n+1} = 2^{n+1} - (x - N) \geq 2^n$. $\square$
 
 +++
 
@@ -336,7 +239,7 @@ Hence if $a, b, N < 2^{n}$, then $a + b \geq N$ if and only if the last qubit of
 
 Here is the then the process, skipping the two control qubits:
 
-**IMPORTANT:** We assume here that $0 \leq a, b < N$.  This means that $a+b < 2N$, and hence
+**IMPORTANT:** *We assume here that $0 \leq a, b < N$.*  This means that $a+b < 2N$, and hence
 $$
 a+b \; \mathrm{mod} \; N =
 \begin{cases}
@@ -362,7 +265,7 @@ $$
 \left| a+b \right\rangle_{n+1} \left| 1 \right\rangle_1,& \text{if $a+b < N$}.
 \end{cases}
 $$
-(We now just need to return the last qubit to $\left| 0 \right\rangle_1$ if necessary.)
+(We now just need to return the last qubit to $\left| 0 \right\rangle_1$ if necessary.  **We could skip this part, i.e., the rest of the steps, if do not mind leaving garbage in this last ancilla.**)
 6) With an inverse of an adder gate, we get
 $$
 \begin{cases}
@@ -454,7 +357,7 @@ modular_adder(a, N).draw("mpl")
 Let's test it:
 
 ```{code-cell} ipython3
-a, N = 3, 10
+a, N = 10, 15
 
 n = int(np.ceil(np.log2(N)))
 
@@ -479,11 +382,11 @@ Since we've set $(c_0, c_1) = (1, 1)$ to run, we need to subtract $1 + 1 \cdot 2
 Now, let's add another number:
 
 ```{code-cell} ipython3
-a = 5
-N = 10
+a = 10
+N = 15
 n = int(np.ceil(np.log2(N)))
 
-b = 7
+b = 13
 
 control_register = QuantumRegister(size=2, name="c")
 quantum_register = QuantumRegister(size=n + 1, name="x")
@@ -539,20 +442,20 @@ $$
 \end{cases}
 $$
 
-The idea is to use the modular adder.  If $x = \sum_{i=0}^{n-1} x_i 2^i$, then $ax = \sum_{i=0}^{n-1} a x_i 2^i$.  When $x_i=0$, we can skip the term, and when $x_i$ we add $a$ to the previous value $2^i$ times, always reducing modulo $N$, with our modular adder.
+The idea is to use the modular adder.  If $x = \sum_{i=0}^{n-1} x_i 2^i$, then $ax = \sum_{i=0}^{n-1} a x_i 2^i$.  When $x_i=0$, we can skip the term, and when $x_i=1$, we add $a$ to the previous value $2^i$ times (always reducing modulo $N$) with our modular adder.
 
-Here is the implementation:
+Here is the implementation.  **Note we are classicaly reducing $a \cdot 2^k$ here!**  (We give an alternative, avoiding this, below.)
 
 ```{code-cell} ipython3
 def modular_mult(a, N):
     """
-    Given positive integers a and N, with a < N, given a controlled modular multiplier
-    gate that takes
-       |1> |x>_n _|b>_n+1   to  |1> |x>_n _|ax + b mod N>_n+1,
+    Given positive integers a and N, with a < N, returns a controlled modular
+    multiplier gate that takes
+       |1> |x>_n |b>_n+1   to  |1> |x>_n |ax + b mod N>_n+1,
     where n = ceil(log2(N)).
 
     INPUTS:
-    * a: the number to be multtiplied;
+    * a: the number to be multiplied;
     * N: the modulus.
 
     OUTPUT:
@@ -586,8 +489,8 @@ def modular_mult(a, N):
 Let's test it, as usual:
 
 ```{code-cell} ipython3
-a = 3
-N = 10
+a = 1
+N = 8
 modular_mult(a, N).draw("mpl")
 ```
 
@@ -600,7 +503,7 @@ N = 15
 b = 5
 x = 3
 
-n = int(np.floor(np.log2(N)) + 1)
+n = int(np.ceil(np.log2(N)))
 
 control_register = QuantumRegister(size=1, name="c")
 quantum_register = QuantumRegister(size=n, name="x")
@@ -636,7 +539,7 @@ N = 15
 b = 7
 x = 10
 
-n = int(np.floor(np.log2(N)) + 1)
+n = int(np.ceil(np.log2(N)))
 
 control_register = QuantumRegister(size=1, name="c")
 quantum_register = QuantumRegister(size=n, name="x")
@@ -660,18 +563,18 @@ state_to_int(psi) == x * 2 + b * (2 ** (n + 1))
 
 +++
 
-Here is a version that does not use classical computation of $a \cdot 2^k$ modulo $N$:
+Here is a version that does not use classical computation of $a \cdot 2^k$ modulo $N$.  We just need to compose modular adder gate of $a \cdot 2^k$ with itself to get the modular adder gate of $a \cdot 2^{k+1}$.
 
 ```{code-cell} ipython3
 def modular_mult_2(a, N):
     """
-    Given positive integers a and N, with a < N, given a controlled modular multiplier
-    gate that takes
-       |1> |x>_n _|b>_n+1   to  |1> |x>_n _|ax + b mod N>_n+1,
+    Given positive integers a and N, with a < N, returns a controlled modular
+    multiplier gate that takes
+       |1> |x>_n |b>_n+1   to  |1> |x>_n |ax + b mod N>_n+1,
     where n = ceil(log2(N)).
 
     INPUTS:
-    * a: the number to be multtiplied;
+    * a: the number to be multiplied;
     * N: the modulus.
 
     OUTPUT:
@@ -707,12 +610,12 @@ Let's test it also:
 
 ```{code-cell} ipython3
 a = 4
-N = 15
+N = 8
 
 b = 5
 x = 3
 
-n = int(np.floor(np.log2(N)) + 1)
+n = int(np.ceil(np.log2(N)))
 
 control_register = QuantumRegister(size=1, name="c")
 quantum_register = QuantumRegister(size=n, name="x")
@@ -726,7 +629,7 @@ mod_multiplier.compose(set_state(x, n), quantum_register, inplace=True)
 if b != 0:
     mod_multiplier.compose(set_state(b, n + 2), last_register, inplace=True)
 
-mod_multiplier.compose(modular_mult(a, N), inplace=True)
+mod_multiplier.compose(modular_mult_2(a, N), inplace=True)
 
 psi = Statevector(mod_multiplier)
 (state_to_int(psi) - (1 + 2 * x)) // 2 ** (n + 1) == (b + a * x) % N
@@ -736,11 +639,22 @@ psi = Statevector(mod_multiplier)
 
 +++
 
-We finally can construct the oracle for Shor's algorithm, as described in the introduction.
+We finally can construct the oracle for Shor's algorithm, as described in the introduction, i.e., we need
+
+$$
+U_a \left| c \right\rangle_1 \left| x \right\rangle_n = \begin{cases}
+  \left| c \right\rangle_1 \left| ax \; \mathrm{mod} N \right\rangle_n, & \text{if $c=1$ and $x <N$}, \\
+  \left| c \right\rangle_1 \left| x \right\rangle_n, & \text{otherwise.}
+\end{cases}
+$$
+
+where $n = \lceil \log_2(N) \rceil$.
+
+The "heavy lifting", of course, is done by `modular_mult` above.  The idea is to just use swaps to move the result to the last $n$ qubits, and make sure that $U_a$ acts as the identity if $x \geq N$.
 
 +++
 
-We also need to implement our own version of controlled swap:
+Due to the project's requirements, we also need to implement our own version of controlled swap:
 
 ```{code-cell} ipython3
 def cswap():
@@ -763,13 +677,27 @@ def cswap():
 cswap().draw("mpl")
 ```
 
-Here is an implementation that does not require to compute inverses modulo $N$, but leaves garbage in the ancilla.
+Here is an implementation that does not require to classically compute inverses modulo $N$, but *leaves garbage in the ancilla*.  In order to leave the input unchanged when $x \geq N$, as required, we need an extra qubit in the ancilla.  (So, the ancilla has $n+3$ qubits, where $n = \lceil \log_2(N) \rceil$.)
 
 ```{code-cell} ipython3
 # garbage in ancilla
-def shors_oracle_gate_2(a, N):
+def shors_oracle_gate(a, N):
+    """
+    Given positive integers a and N, with a < N, returns a controlled modular
+    multiplier gate that takes
+       |1> |x>_n   to  |1> |ax mod N>_n,
+    where n = ceil(log2(N)).
 
-    n = int(np.floor(np.log2(N)) + 1)
+    INPUTS:
+    * a: the number to be multiplied;
+    * N: the modulus.
+
+    OUTPUT:
+    A controlled modular multiplier gate that takes
+       |1> |x>_n  to  |1> |ax mod N>_n,
+    where n = ceil(log2(N)).
+    """
+    n = int(np.ceil(np.log2(N)))
 
     control_register = QuantumRegister(size=1, name="c")
     quantum_register = QuantumRegister(size=n, name="x")
@@ -781,18 +709,22 @@ def shors_oracle_gate_2(a, N):
 
     # controlled add/subtract N
     add_N_gate = draper_adder(N, n + 1).to_gate(label=f"add_{N}").control(1)
-    add_N_gate_inv = draper_adder(N, n + 1).inverse().to_gate(label=f"sub_{N}").control(1)
+    add_N_gate_inv = (
+        draper_adder(N, n + 1).inverse().to_gate(label=f"sub_{N}").control(1)
+    )
 
     # deal with case when x > N
     # using the ancilla before last as extra precision for addition and
     # last ancilla to keep track if need to disable control
-    oracle.compose(add_N_gate_inv, [0] + list(range(1, n+1)) + [2 * n + 2], inplace=True)
+    oracle.compose(
+        add_N_gate_inv, [0] + list(range(1, n + 1)) + [2 * n + 2], inplace=True
+    )
     oracle.cx(0, 2 * n + 2)
     oracle.ccx(0, 2 * n + 2, 2 * n + 3)
     oracle.cx(0, 2 * n + 2)
-    oracle.compose(add_N_gate, [0] + list(range(1, n+1)) + [2 * n + 2], inplace=True)
+    oracle.compose(add_N_gate, [0] + list(range(1, n + 1)) + [2 * n + 2], inplace=True)
     oracle.cx(2 * n + 3, 0)
-    
+
     mod_mult_a_N = modular_mult(a, N)
 
     oracle.compose(mod_mult_a_N, inplace=True)
@@ -806,45 +738,54 @@ def shors_oracle_gate_2(a, N):
     return oracle
 ```
 
+To make sure the code works, we will run various test, so let's write a function for that.
+
 ```{code-cell} ipython3
 def test_oracle(a, N, c, x):
-    n = int(np.floor(np.log2(N)) + 1)
+    """
+    Tests if the function shors_oracle_gate works with the given input.
+
+    INPUTS:
+    * a: the number to be multiplied;
+    * N: the modulus;
+    * c: the control qubit on the input |c>|x>;
+    * x: the number to be multiplied, i.e., the last n qubits of the input
+         |c>|x>.
+
+    OUTPUT:
+    True, if the function returned the correct result, and False othwerwise.
+    """
+    n = int(np.ceil(np.log2(N)))
 
     control_register = QuantumRegister(size=1, name="c")
     quantum_register = QuantumRegister(size=n, name="x")
     ancilla = QuantumRegister(size=n + 3, name="b")
-    
+
     oracle = QuantumCircuit(control_register, quantum_register, ancilla)
-    
+
     if c != 0:
-     oracle.x(0)
-    
+        oracle.x(0)
+
     oracle.compose(set_state(x, n), quantum_register, inplace=True)
-    
-    oracle.compose(shors_oracle_gate_2(a, N), inplace=True)
-    
+
+    oracle.compose(shors_oracle_gate(a, N), inplace=True)
+
     psi = Statevector(oracle)
-    
+
     # drop the ancillas
     res = state_to_int(psi) % 2 ** (n + 1)
-    
+
     if c == 0 or (x >= N):
+        # we should get the initial state
         return res == c + 2 * x
 
-    return print((res - 1) // 2 == (a * x) % N)
+    return (res - 1) // 2 == (a * x) % N
 ```
 
-```{code-cell} ipython3
-a = 7
-N = 15
-
-c = 1
-x = 10
-
-test_oracle(a, N, c, x)
-```
+A few manual initial tests:
 
 ```{code-cell} ipython3
+# control = 0, x < N
 a = 7
 N = 15
 
@@ -855,6 +796,18 @@ test_oracle(a, N, c, x)
 ```
 
 ```{code-cell} ipython3
+# control = 0, x >= N
+a = 7
+N = 20
+
+c = 0
+x = 22
+
+test_oracle(a, N, c, x)
+```
+
+```{code-cell} ipython3
+# control = 1, x < N
 a = 7
 N = 15
 
@@ -865,6 +818,7 @@ test_oracle(a, N, c, x)
 ```
 
 ```{code-cell} ipython3
+# control = 1, x >= N
 a = 7
 N = 20
 
@@ -874,97 +828,103 @@ x = 22
 test_oracle(a, N, c, x)
 ```
 
----
-
-+++
-
-If we don't want garbage in our ancilla, we need to be able to invert integers modulo $N$.  Here is an implementation of the extended Euclidean algorithm:
+Now, let's run various tests, using random numbers.  (These might take a while.)
 
 ```{code-cell} ipython3
-def modular_inverse(a, N):
-    """
-    Given integers a and N, with N>0, retrurns the inverse of a
-    modulo N.
+%%time
+# c = 0, x < N
+c = 0
 
-    INPUTS:
-    * a: an integer to be inverted;
-    * N: the modulus.
+number_of_tests = 10
+minN, maxN = 15, 30
 
-    OUTPUT:
-    The inverse of a modulo N.
-    """
-    x, y, u1, u2 = a, N, 1, 0
-    r = x % y
-    while r != 0:
-        q, r = divmod(x, y)
-        x, y, u1, u2 = y, r, u2, (u1 - q * u2)
+for _ in range(number_of_tests):
+    N = randint(minN, maxN)
+    a = randint(0, N - 1)
+    x = randint(0, N - 1)
 
-    if x != 1:
-        raise ValueError(f"GCD of {a} and {N} is {x}, not 1.  No inverse exists.")
-
-    return u1 % N
-```
-
-```{code-cell} ipython3
-def shors_oracle_gate(a, N):
-
-    n = int(np.floor(np.log2(N)) + 1)
-
-    control_register = QuantumRegister(size=1, name="c")
-    quantum_register = QuantumRegister(size=n, name="x")
-    ancilla = QuantumRegister(size=n + 2, name="b")
-
-    oracle = QuantumCircuit(
-        control_register, quantum_register, ancilla, name=f"Mult({a})_Mod({N})"
-    )
-
-    mod_mult_a_N = modular_mult(a, N)
-
-    oracle.compose(mod_mult_a_N, inplace=True)
-    for i in range(n):
-        # oracle.cswap(0, i + 1, n + i + 1)
-        oracle.compose(cswap(), [0, i + 1, n + i + 1], inplace=True)
-
-    # is this necessary?  we can leave garbage in the ancilla, right?
-    # b = modular_inverse(a, N)
-    # inv_mod_mult_a_N = modular_mult(N - b, N)
-    inv_mod_mult_a_N = modular_mult(N - a, N).inverse()
-
-    oracle.compose(inv_mod_mult_a_N, inplace=True)
-
-    return oracle
-```
-
-Test:
-
-```{code-cell} ipython3
-a = 7
-N = 15
-
-c = 1
-x = 3
-
-n = int(np.floor(np.log2(N)) + 1)
-
-control_register = QuantumRegister(size=1, name="c")
-quantum_register = QuantumRegister(size=n, name="x")
-ancilla = QuantumRegister(size=n + 2, name="b")
-
-oracle = QuantumCircuit(control_register, quantum_register, ancilla)
-
-if c != 0:
- oracle.x(0)
-
-oracle.compose(set_state(x, n), quantum_register, inplace=True)
-
-oracle.compose(shors_oracle_gate(a, N), inplace=True)
-
-psi = Statevector(oracle)
-probs = np.round(psi.probabilities(), 4)
-res = np.sum(probs * np.arange(len(probs)))
-
-if c == 0:
-    print(res == 2 * x)
+    if not test_oracle(a, N, c, x):
+        print(
+            f"Failed for {a = }, {N = }, {c = }, {x = }.  (Here control = 0 and x < N.)"
+        )
+        break
 else:
-    print((res - 1) // 2 == (a * x) % N)
+    print("It woked for all cases.")
 ```
+
+```{code-cell} ipython3
+%%time
+# c = 1, x < N
+c = 1
+
+number_of_tests = 10
+minN, maxN = 15, 30
+
+for _ in range(number_of_tests):
+    N = randint(minN, maxN)
+    a = randint(0, N - 1)
+    x = randint(0, N - 1)
+
+    if not test_oracle(a, N, c, x):
+        print(
+            f"Failed for {a = }, {N = }, {c = }, {x = }.  (Here control = 1 and x < N.)"
+        )
+        break
+else:
+    print("It woked for all cases.")
+```
+
+```{code-cell} ipython3
+%%time
+# c = 0, x >= N
+c = 0
+
+number_of_tests = 10
+
+# only 4 or 5 bits
+
+for _ in range(number_of_tests):
+    n = randint(4, 5)
+    N = randint(2 ** (n - 1), 2**n - 2)
+    a = randint(0, N - 1)
+    x = randint(N, 2**n - 1)
+
+    if not test_oracle(a, N, c, x):
+        print(
+            f"Failed for {a = }, {N = }, {c = }, {x = }.  (Here control = 0 and x >= N.)"
+        )
+        break
+else:
+    print("It woked for all cases.")
+```
+
+```{code-cell} ipython3
+%%time
+# c = 1, x >= N
+c = 1
+
+number_of_tests = 10
+
+# only 4 or 5 bits
+
+for _ in range(number_of_tests):
+    n = randint(4, 5)
+    N = randint(2 ** (n - 1), 2**n - 2)
+    a = randint(0, N - 1)
+    x = randint(N, 2**n - 1)
+
+    if not test_oracle(a, N, c, x):
+        print(
+            f"Failed for {a = }, {N = }, {c = }, {x = }.  (Here control = 0 and x >= N.)"
+        )
+        break
+else:
+    print("It woked for all cases.")
+```
+
+## References:
+
+1)  Stéphane Beauregard, [Circuit for Shor’s algorithm using $2n+3$ qubits](https://arxiv.org/pdf/quant-ph/0205095).  (Main reference.)
+2) [Ákos Nagy](https://akosnagy.com/)'s notes for the [Erdős Institute](https://www.erdosinstitute.org/) [Fall 2025 Quantum Computing Bootcamp](https://www.erdosinstitute.org/programs/fall-2025/quantum-computing-boot-camp).
+3) Thomas G. Draper, [Addition on a Quantum Computer](https://arxiv.org/abs/quant-ph/0008033).
+4) Michael A. Nielsen, Isaac L. Chuang, [Quantum Computation and Quantum Information](https://www.cambridge.org/highereducation/books/quantum-computation-and-quantum-information/01E10196D0A682A6AEFFEA52D53BE9AE#overview).
