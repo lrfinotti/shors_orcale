@@ -152,6 +152,11 @@ synth_qft_full(num_qubits=3, inverse=True).draw("mpl")
 
 ## Draper Adder Gate
 
+The $n$-qubit adder gate $A_k$ is such that
+$$
+A_k \left| x \right\rangle_n = \left| (x + k) \; \mathrm{mod} \; 2^n \right\rangle.
+$$
+
 Below we implement [Draper's Adder circuit](https://arxiv.org/abs/quant-ph/0008033).  (**Credit:** The code was given on a discussion session notebook for the [Erdős Institute](https://www.erdosinstitute.org/) [Fall 2025 Quantum Computing Bootcamp](https://www.erdosinstitute.org/programs/fall-2025/quantum-computing-boot-camp)).
 
 ```{code-cell} ipython3
@@ -249,45 +254,46 @@ N - (a+b),& \text{if $a+b \geq N$.}
 $$
 
 1) Start with $\left| b \right\rangle_{n+1} \left| 0 \right\rangle_1$.
-2) Use an adder gate to the first $n+1$ qubits to get $\left| a+b \right\rangle_{n+1} \left| 0 \right\rangle_1$.
-3) Use the inverse of an adder gate to the first $n+1$ qubits to get $\left| a+b - N \right\rangle_{n+1} \left| 0 \right\rangle_1$.
-4) With $CX$ gate, with control as the last qubit of $\left| a+b - N \right\rangle_{n+1}$ and target the last qubit, by the lemma above we get
+2) Use an adder gate to the first $n+1$ qubits to get $\left| a+b \; \mathrm{mod} \; 2^{n+1} \right\rangle_{n+1} \left| 0 \right\rangle_1$.
+3) Use the inverse of an adder gate to the first $n+1$ qubits to get $\left| a+b - N \; \mathrm{mod} \; 2^{n+1} \right\rangle_{n+1} \left| 0 \right\rangle_1$.
+4) With $CX$ gate, with control as the last qubit of $\left| a+b - N \; \mathrm{mod} \; 2^{n+1}\right\rangle_{n+1}$ and target the last qubit, by the lemma above we get
 $$
 \begin{cases}
-\left| a+b - N \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b \geq N$}, \\
-\left| a+b-N \right\rangle_{n+1} \left| 1 \right\rangle_1,& \text{if $a+b < N$}.
+\left| a+b - N \; \mathrm{mod} \; 2^{n+1} \right\rangle_{n+1} \; \mathrm{mod} \; 2^{n+1} \left| 0 \right\rangle_1,& \text{if $a+b \geq N$}, \\
+\left| a+b-N \; \mathrm{mod} \; 2^{n+1} \right\rangle_{n+1} \; \mathrm{mod} \; 2^{n+1} \left| 1 \right\rangle_1,& \text{if $a+b < N$}.
 \end{cases}
 $$
 5)  Then, with a controlled adder gate, with the last qubit as control and target as the first $n+1$ qubits, we get
 $$
 \begin{cases}
-\left| a+b - N \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b \geq N$}, \\
-\left| a+b \right\rangle_{n+1} \left| 1 \right\rangle_1,& \text{if $a+b < N$}.
+\left| a+b - N \; \mathrm{mod} \; 2^{n+1} \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b \geq N$}, \\
+\left| a+b  \; \mathrm{mod} \; 2^{n+1}\right\rangle_{n+1} \left| 1 \right\rangle_1,& \text{if $a+b < N$}.
 \end{cases}
 $$
-(We now just need to return the last qubit to $\left| 0 \right\rangle_1$ if necessary.  **We could skip this part, i.e., the rest of the steps, if do not mind leaving garbage in this last ancilla.**)
+(We now just need to return the last qubit to $\left| 0 \right\rangle_1$ if necessary.)
 6) With an inverse of an adder gate, we get
 $$
 \begin{cases}
-\left| b - N \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b \geq N$}, \\
-\left| b \right\rangle_{n+1} \left| 1 \right\rangle_1,& \text{if $a+b < N$}.
+\left| b - N \; \mathrm{mod} \; 2^{n+1}\right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b \geq N$}, \\
+\left| b \; \mathrm{mod} \; 2^{n+1} \right\rangle_{n+1} \left| 1 \right\rangle_1,& \text{if $a+b < N$}.
 \end{cases}
 $$
 7) Since $0 \leq b < N$, by our lemma again, we can use a $X$ gate in the qubit before last, followed by a $CX$ gate with the control the last qubit before last and target as the last one, followed by an $X$ gate in the qubit before last, obtaining
 $$
 \begin{cases}
-\left| b - N \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b \geq N$}, \\
-\left| b \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b < N$}.
+\left| b - N \; \mathrm{mod} \; 2^{n+1} \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b \geq N$}, \\
+\left| b \; \mathrm{mod} \; 2^{n+1} \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b < N$}.
 \end{cases}
 $$
 8) Finally, we add another adder gate, obtaining
 $$
 \begin{cases}
-\left| a+b - N \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b \geq N$}, \\
-\left| a+b \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b < N$}.
+\left| a+b - N \; \mathrm{mod} \; 2^{n+1} \right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b \geq N$}, \\
+\left| a+b \; \mathrm{mod} \; 2^{n+1}\right\rangle_{n+1} \left| 0 \right\rangle_1,& \text{if $a+b < N$}.
 \end{cases}
 $$
 
+Note that in either case, we have that the first $n$ (we do not need $n+1$ at this stage) qubits correspond to $a+b \; \mathrm{mod} \; N$.
 
 The function below implements this:
 
@@ -507,15 +513,15 @@ n = int(np.ceil(np.log2(N)))
 
 control_register = QuantumRegister(size=1, name="c")
 quantum_register = QuantumRegister(size=n, name="x")
-last_register = QuantumRegister(size=n + 2, name="b")
+adder_register = QuantumRegister(size=n + 2, name="b")
 
-mod_multiplier = QuantumCircuit(control_register, quantum_register, last_register)
+mod_multiplier = QuantumCircuit(control_register, quantum_register, adder_register)
 
 mod_multiplier.x(0)  # make sure it runs at this stage
 mod_multiplier.compose(set_state(x, n), quantum_register, inplace=True)
 
 if b != 0:
-    mod_multiplier.compose(set_state(b, n + 2), last_register, inplace=True)
+    mod_multiplier.compose(set_state(b, n + 2), adder_register, inplace=True)
 
 mod_multiplier.compose(modular_mult(a, N), inplace=True)
 
@@ -543,15 +549,15 @@ n = int(np.ceil(np.log2(N)))
 
 control_register = QuantumRegister(size=1, name="c")
 quantum_register = QuantumRegister(size=n, name="x")
-last_register = QuantumRegister(size=n + 2, name="b")
+adder_register = QuantumRegister(size=n + 2, name="b")
 
-mod_multiplier = QuantumCircuit(control_register, quantum_register, last_register)
+mod_multiplier = QuantumCircuit(control_register, quantum_register, adder_register)
 
 # mod_multiplier.x(0)  # make sure it runs at this stage
 mod_multiplier.compose(set_state(x, n), quantum_register, inplace=True)
 
 if b != 0:
-    mod_multiplier.compose(set_state(b, n + 2), last_register, inplace=True)
+    mod_multiplier.compose(set_state(b, n + 2), adder_register, inplace=True)
 
 mod_multiplier.compose(modular_mult(a, N), inplace=True)
 
@@ -619,17 +625,17 @@ n = int(np.ceil(np.log2(N)))
 
 control_register = QuantumRegister(size=1, name="c")
 quantum_register = QuantumRegister(size=n, name="x")
-last_register = QuantumRegister(size=n + 2, name="b")
+adder_register = QuantumRegister(size=n + 2, name="b")
 
-mod_multiplier = QuantumCircuit(control_register, quantum_register, last_register)
+mod_multiplier = QuantumCircuit(control_register, quantum_register, adder_register)
 
 mod_multiplier.x(0)  # make sure it runs at this stage
 mod_multiplier.compose(set_state(x, n), quantum_register, inplace=True)
 
 if b != 0:
-    mod_multiplier.compose(set_state(b, n + 2), last_register, inplace=True)
+    mod_multiplier.compose(set_state(b, n + 2), adder_register, inplace=True)
 
-mod_multiplier.compose(modular_mult_2(a, N), inplace=True)
+mod_multiplier.compose(modular_mult(a, N), inplace=True)
 
 psi = Statevector(mod_multiplier)
 (state_to_int(psi) - (1 + 2 * x)) // 2 ** (n + 1) == (b + a * x) % N
@@ -644,7 +650,7 @@ We finally can construct the oracle for Shor's algorithm, as described in the in
 $$
 U_a \left| c \right\rangle_1 \left| x \right\rangle_n = \begin{cases}
   \left| c \right\rangle_1 \left| ax \; \mathrm{mod} N \right\rangle_n, & \text{if $c=1$ and $x <N$}, \\
-  \left| c \right\rangle_1 \left| x \right\rangle_n, & \text{otherwise.}
+  \left| c \right\rangle_1 \left| x \right\rangle_n, & \text{otherwise,}
 \end{cases}
 $$
 
@@ -678,6 +684,69 @@ cswap().draw("mpl")
 ```
 
 Here is an implementation that does not require to classically compute inverses modulo $N$, but *leaves garbage in the ancilla*.  In order to leave the input unchanged when $x \geq N$, as required, we need an extra qubit in the ancilla.  (So, the ancilla has $n+3$ qubits, where $n = \lceil \log_2(N) \rceil$.)
+
++++
+
+If we don't want garbage in our ancilla, we need to be able to invert integers modulo $N$.  Here is an implementation of the extended Euclidean algorithm:
+
+```{code-cell} ipython3
+def modular_inverse(a, N):
+    """
+    Given integers a and N, with N>0, retrurns the inverse of a
+    modulo N.
+
+    INPUTS:
+    * a: an integer to be inverted;
+    * N: the modulus.
+
+    OUTPUT:
+    The inverse of a modulo N.
+    """
+    x, y, u1, u2 = a, N, 1, 0
+    r = x % y
+    while r != 0:
+        q, r = divmod(x, y)
+        x, y, u1, u2 = y, r, u2, (u1 - q * u2)
+
+    if x != 1:
+        raise ValueError(f"GCD of {a} and {N} is {x}, not 1.  No inverse exists.")
+
+    return u1 % N
+```
+
+```{code-cell} ipython3
+def shors_oracle_gate(a, N):
+
+    n = int(np.floor(np.log2(N)) + 1)
+
+    control_register = QuantumRegister(size=1, name="c")
+    quantum_register = QuantumRegister(size=n, name="x")
+    ancilla = QuantumRegister(size=n + 2, name="b")
+
+    oracle = QuantumCircuit(
+        control_register, quantum_register, ancilla, name=f"Mult({a})_Mod({N})"
+    )
+
+    mod_mult_a_N = modular_mult(a, N)
+
+    oracle.compose(mod_mult_a_N, inplace=True)
+    for i in range(n):
+        # oracle.cswap(0, i + 1, n + i + 1)
+        oracle.compose(cswap(), [0, i + 1, n + i + 1], inplace=True)
+
+    # is this necessary?  we can leave garbage in the ancilla, right?
+    # b = modular_inverse(a, N)
+    # inv_mod_mult_a_N = modular_mult(N - b, N)
+    inv_mod_mult_a_N = modular_mult(N - a, N).inverse()
+
+    oracle.compose(inv_mod_mult_a_N, inplace=True)
+
+    return oracle
+```
+
+```{code-cell} ipython3
+
+```
 
 ```{code-cell} ipython3
 # garbage in ancilla
