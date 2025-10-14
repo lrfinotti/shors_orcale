@@ -161,6 +161,41 @@ synth_qft_full(num_qubits=3, inverse=True).draw("mpl")
 # $$
 #
 # Below we implement [Draper's Adder circuit](https://arxiv.org/abs/quant-ph/0008033).  (**Credit:** The code was given on a discussion session notebook for the [Erdős Institute](https://www.erdosinstitute.org/) [Fall 2025 Quantum Computing Bootcamp](https://www.erdosinstitute.org/programs/fall-2025/quantum-computing-boot-camp)).
+#
+# To save computations when composing additions, we will implement the *"Fourier version"*, meaning, a version without composing with the Fourier Transform.
+
+# %%
+def f_draper_adder(k, n):
+    """
+    Given positive integers k and n, returns a quantum circuit that takes |F(x)>_n
+    to |F(x + k) mod 2**n>_n F, where F is the Fourier Transform.
+
+    INPUTS:
+    k: the number to be added (positive integer);
+    n: number of qubits.
+
+    OUTPUT:
+    A quantum circuit that takes |F(x)>_n to|F(x + k) mod 2**n>_n F, where F is the
+    Fourier Transform.
+    """
+    quantum_register = QuantumRegister(size=n, name="x")
+    draper_adder_circuit = QuantumCircuit(quantum_register, name=f"{k} adder")
+
+    for i, q in enumerate(reversed(quantum_register)):
+        draper_adder_circuit.p(np.pi * k / (2 ** i), q)
+
+    return draper_adder_circuit
+
+
+# %% [markdown]
+# Representation for $k=n=3$:
+
+# %%
+f_draper_adder(3, 3).draw("mpl")
+
+
+# %% [markdown]
+# Now, here is the actual adder:
 
 # %%
 def draper_adder(k, n):
@@ -179,18 +214,11 @@ def draper_adder(k, n):
     draper_adder_circuit = QuantumCircuit(quantum_register, name=f"{k} adder")
 
     draper_adder_circuit.compose(synth_qft_full(n), inplace=True)
-
-    # phaser part
-    for i, q in enumerate(reversed(quantum_register)):
-        draper_adder_circuit.p(np.pi * k / (2 ** i), q)
-
+    draper_adder_circuit.compose(f_draper_adder(k, n), inplace=True)
     draper_adder_circuit.compose(synth_qft_full(n, inverse=True), inplace=True)
 
     return draper_adder_circuit
 
-
-# %% [markdown]
-# Representation for $k=n=3$:
 
 # %%
 draper_adder(3, 3).draw("mpl")
@@ -296,7 +324,74 @@ state_to_int(psi) == a + k
 #
 # Note that in either case, we have that the first $n$ (we do not need $n+1$ at this stage) qubits correspond to $a+b \; \mathrm{mod} \; N$.
 #
-# The function below implements this:
+# Again, for efficiency, we will implement a Fourier version:
+
+# %%
+def f_modular_adder(a, N):
+    """
+    Given positive integers a and N, with a < N, given a controlled modular (with two
+    control qubits) adder gate that takes
+       |11> |F(b)>_n+1 |0>_1  to  |11> |F(a + b mod N)>_n+1 |0>_1,
+    where n = ceil(log2(N)) and F gives the Fourier Transform.
+
+    INPUTS:
+    * a: the number to be added;
+    * N: the modulus.
+
+    OUTPUT:
+    A controlled modular (with two control qubits) adder gate that takes
+       |11> |b>_n+1 |0>_1  to  |11> |a + b mod N>_n+1 |0>_1,
+    where n = ceil(log2(N)).
+    """
+
+    n = int(np.ceil(np.log2(N)))
+
+    control_register = QuantumRegister(size=2, name="c")
+    quantum_register = QuantumRegister(size=n + 1, name="x")  # note the "+1"!
+    last_register = QuantumRegister(size=1, name="l")
+
+    mod_adder_circ = QuantumCircuit(
+        control_register, quantum_register, last_register, name=f"Add({a})_Mod({N})"
+    )
+
+    # create the gates to be used
+    # add and subtract a
+    add_a_gate = f_draper_adder(a, n + 1).to_gate(label=f"add_{a}")
+    add_a_gate_inv = f_draper_adder(a, n + 1).inverse().to_gate(label=f"sub_{a}")
+    # controlled versions
+    c_add_a_gate = add_a_gate.control(2)
+    c_add_a_gate_inv = add_a_gate_inv.control(2)
+
+    # add and subtract N
+    add_N_gate = f_draper_adder(N, n + 1).to_gate(label=f"add_{N}")
+    add_N_gate_inv = f_draper_adder(N, n + 1).inverse().to_gate(label=f"sub_{N}")
+    # controlled version
+    c_add_N_gate = add_N_gate.control(1)
+
+    mod_adder_circ.compose(c_add_a_gate, range(n + 3), inplace=True)
+    mod_adder_circ.compose(add_N_gate_inv, quantum_register, inplace=True)
+    mod_adder_circ.compose(
+        synth_qft_full(n + 1, inverse=True), quantum_register, inplace=True
+    )
+    mod_adder_circ.cx(-2, -1)
+    mod_adder_circ.compose(synth_qft_full(n + 1), quantum_register, inplace=True)
+    mod_adder_circ.compose(c_add_N_gate, [-1] + list(range(2, n + 3)), inplace=True)
+    mod_adder_circ.compose(c_add_a_gate_inv, range(n + 3), inplace=True)
+
+    mod_adder_circ.compose(
+        synth_qft_full(n + 1, inverse=True), quantum_register, inplace=True
+    )
+    mod_adder_circ.x(-2)
+    mod_adder_circ.cx(-2, -1)
+    mod_adder_circ.x(-2)
+    mod_adder_circ.compose(synth_qft_full(n + 1), quantum_register, inplace=True)
+    mod_adder_circ.compose(c_add_a_gate, range(n + 3), inplace=True)
+
+    return mod_adder_circ
+
+
+# %% [markdown]
+# Now, to obtain the actual modular adder, we just conjugate by the Fourier Transform.
 
 # %%
 def modular_adder(a, N):
@@ -326,29 +421,9 @@ def modular_adder(a, N):
         control_register, quantum_register, last_register, name=f"Add({a})_Mod({N})"
     )
 
-    # create the gates to be used
-    # add and subtract a
-    add_a_gate = draper_adder(a, n + 1).to_gate(label=f"add_{a}")
-    add_a_gate_inv = draper_adder(a, n + 1).inverse().to_gate(label=f"sub_{a}")
-    # controlled versions
-    c_add_a_gate = add_a_gate.control(2)
-    c_add_a_gate_inv = add_a_gate_inv.control(2)
-
-    # add and subtract N
-    add_N_gate = draper_adder(N, n + 1).to_gate(label=f"add_{N}")
-    add_N_gate_inv = draper_adder(N, n + 1).inverse().to_gate(label=f"sub_{N}")
-    # controlled version
-    c_add_N_gate = add_N_gate.control(1)
-
-    mod_adder_circ.compose(c_add_a_gate, range(n + 3), inplace=True)
-    mod_adder_circ.compose(add_N_gate_inv, quantum_register, inplace=True)
-    mod_adder_circ.cx(-2, -1)
-    mod_adder_circ.compose(c_add_N_gate, [-1] + list(range(2, n + 3)), inplace=True)
-    mod_adder_circ.compose(c_add_a_gate_inv, range(n + 3), inplace=True)
-    mod_adder_circ.x(-2)
-    mod_adder_circ.cx(-2, -1)
-    mod_adder_circ.x(-2)
-    mod_adder_circ.compose(c_add_a_gate, range(n + 3), inplace=True)
+    mod_adder_circ.compose(synth_qft_full(n + 1), quantum_register, inplace=True)
+    mod_adder_circ.compose(f_modular_adder(a, N), inplace=True)
+    mod_adder_circ.compose(synth_qft_full(n + 1, inverse=True), quantum_register, inplace=True)
 
     return mod_adder_circ
 
@@ -357,9 +432,9 @@ def modular_adder(a, N):
 # Here is a picture:
 
 # %%
-a, N = 3, 10
+a, N = 2, 6
 
-modular_adder(a, N).draw("mpl")
+f_modular_adder(a, N).draw("mpl")
 
 # %% [markdown]
 # Let's test it:
@@ -482,14 +557,22 @@ def modular_mult(a, N):
         control_register, quantum_register, adder_register, name=f"Mult({a})_Mod({N})"
     )
 
+    mod_mult_circ.compose(
+        synth_qft_full(n + 1), list(range(n + 1, 2 * n + 2)), inplace=True
+    )
+
     # below we will use modular add gates with a * (2 **i); these need to be reduced
     # first!!!
     for i in range(n):
         mod_mult_circ.compose(
-            modular_adder((a * 2**i) % N, N),  # REDUCE!!
+            f_modular_adder((a * 2**i) % N, N),  # REDUCE!!
             [0] + [i + 1] + list(range(n + 1, 2 * n + 3)),
             inplace=True,
         )
+
+    mod_mult_circ.compose(
+        synth_qft_full(n + 1, inverse=True), list(range(n + 1, 2 * n + 2)), inplace=True
+    )
 
     return mod_mult_circ
 
@@ -499,7 +582,7 @@ def modular_mult(a, N):
 
 # %%
 a = 1
-N = 8
+N = 3
 modular_mult(a, N).draw("mpl")
 
 # %% [markdown]
@@ -601,8 +684,12 @@ def modular_mult_2(a, N):
         control_register, quantum_register, adder_register, name=f"Mult({a})_Mod({N})"
     )
 
+    mod_mult_circ.compose(
+        synth_qft_full(n + 1), list(range(n + 1, 2 * n + 2)), inplace=True
+    )
+    
     # this will contain adder gates for a * 2**i
-    add_power_2 = modular_adder(a, N)
+    add_power_2 = f_modular_adder(a, N)
 
     for i in range(n):
         mod_mult_circ.compose(
@@ -611,6 +698,10 @@ def modular_mult_2(a, N):
             inplace=True,
         )
         add_power_2.compose(add_power_2, inplace=True)
+
+    mod_mult_circ.compose(
+        synth_qft_full(n + 1, inverse=True), list(range(n + 1, 2 * n + 2)), inplace=True
+    )
 
     return mod_mult_circ
 
