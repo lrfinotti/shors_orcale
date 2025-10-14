@@ -8,12 +8,12 @@ It contains Jupyter notebook (along side the corresponding Markdown and Python f
 
 More precisely, given non-negative integers $a$ and $N$, with $N>0$, we need to implement $U_a$ given by
 
-\[
+$
 U_a \left| c \right\rangle_1 \left| x \right\rangle_n = \begin{cases}
   \left| c \right\rangle_1 \left| ax \; \mathrm{mod} N \right\rangle_n, & \text{if $c=1$ and $x <N$}, \\
   \left| c \right\rangle_1 \left| x \right\rangle_n, & \text{otherwise,}
 \end{cases}
-\]
+$
 
 where $n = \lceil \log_2(N) \rceil$.
 
