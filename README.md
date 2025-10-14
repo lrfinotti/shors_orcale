@@ -16,9 +16,7 @@ if $c=1$ and $x <N$ and
 ```math
 U_a \left| c \right\rangle_1 \left| x \right\rangle_n = \left| c \right\rangle_1 \left| x \right\rangle_n,
 ```
-otherwise.
-
-where $n = \lceil \log_2(N) \rceil$.
+otherwise, where $n = \lceil \log_2(N) \rceil$.
 
 The implementation follows Beauregard's [Circuit for Shor’s algorithm using $2n+3$ qubits](https://arxiv.org/pdf/quant-ph/0205095) construction.
 
