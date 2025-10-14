@@ -641,212 +641,6 @@ psi = Statevector(mod_multiplier)
 (state_to_int(psi) - (1 + 2 * x)) // 2 ** (n + 1) == (b + a * x) % N
 ```
 
-### Restriction on $x$
-
-+++
-
-To attain our actual goal, we will slightly modify the `modular_mult` circuit above, so that we have:
-
-We now need a controlled modular multiplier:
-$$
-\left| c \right\rangle_1 \left| x \right\rangle_n \left| b \right\rangle_{n+1} \left| 0 \right\rangle_2
-\begin{cases}
-\left| c \right\rangle_1 \left| x \right\rangle_n \left| b + ax \; \mathrm{mod} \; N \right\rangle_{n+1} \left| 0 \right\rangle_2\mapsto,& \text{if $c=1$ and $x < N$}; \\
-\left| c \right\rangle_1 \left| x \right\rangle_n \left| b \right\rangle_{n+1} \left| 0 \right\rangle_2, & \text{otherwise.}
-\end{cases}
-$$
-Note that we need two extra qubits to accomplish this task.
-
-+++
-
-The main idea here is, again, that if $x > N$ if and only if the most significant of $\left| x - N \right\rangle_{n+1}$ is zero, as stated in a previous lemma.  Therefore we will need to add an extra qubit to perform this subtraction with $n+1$ qubits.
-
-The other qubit is needed to keep track if it was the case that $x > N$.
-
-The procedure will be:
-
-1) If the control $c$ is $1$, we subtract $N$ from $x$ using $n+1$ qubits.
-2) If $c = 1$, we flip the last qubit of $ \left| x - N \right\rangle_{n+1}$ (the first qubit of the ancilla).
-3) If both $c$ and this flipped last qubit are $1$, then we flip the last qubit of the ancilla.
-4) If $c = 1$, we flip the last qubit of $ \left| x - N \right\rangle_{n+1}$ (the first qubit of the ancilla).  At this point, qubit is back to its state after subtracting $N$, so we are back at $ \left| x - N \right\rangle_{n+1}$.
-5) If the control $c$ is $1$, we add $N$ to get $ \left| x \right\rangle_{n} \left| 0 \right\rangle$ back.  So, at this point we have the original state, except that the second ancilla is $1$ if $x > N$ and $0$ otherwise.
-6) If the second ancilla is $1$, we flip the control.  This only happens if we started with $c=1$ and we had $x > N$.  So, flipping, in this case, will set $c=0$.
-7) Now we call `modular_mult`.  If $c=0$, then it will not do anything.  So, in particular, if $c=1$, but $x > N$, nothing will be done.  At the end of this step, we get $ \left| b + ax \; \mathrm{mod} N \right\rangle$ if $c=1$ and $x < N$ or just $ \left| b \right\rangle$ if otherwise, exactly what we needed.  So, it just remains to reset the second ancilla to zero and $c$ to its original state.
-8) If the second ancilla is one, we flip $c$.  This only happens if $c$ was flipped already, and will return it to its original state (which would be $1$, in this case).
-9) Now we repeat steps 2 to 5.  This will reset the second ancilla when necessary, leaving the rest unchanged.
-
-+++
-
-Here is the implementation of this:
-
-```{code-cell} ipython3
-def modular_mult_cond(a, N):
-    """
-    Given positive integers a and N, with a < N, returns a controlled modular
-    multiplier gate that takes
-       |c> |x>_n |b>_n+1 |0>_2  to  |c> |x>_n |ax + b mod N>_n+1 |0>_2,
-    if c = 1 and x < N and
-       |c> |x>_n |b>_n+1 |0>_2  to  |c> |x>_n |b>_n+1 |0>_2,
-    otherwise, where n = ceil(log2(N)).
-
-    INPUTS:
-    * a: the number to be multiplied;
-    * N: the modulus.
-
-    OUTPUT:
-    A controlled modular multiplier gate that takes
-       |c> |x>_n |b>_n+1 |0>_2  to  |c> |x>_n |ax + b mod N>_n+1 |0>_2,
-    if c = 1 and x < N and
-       |c> |x>_n |b>_n+1 |0>_2  to  |c> |x>_n |b>_n+1 |0>_2,
-    otherwise, where n = ceil(log2(N)).
-    """
-    n = int(np.ceil(np.log2(N)))
-
-    control_register = QuantumRegister(size=1, name="c")
-    quantum_register = QuantumRegister(size=n, name="x")
-    adder_register = QuantumRegister(size=n + 2, name="b")
-    ancilla_register = QuantumRegister(size=2, name="l")
-
-    mod_mult_circ = QuantumCircuit(
-        control_register,
-        quantum_register,
-        adder_register,
-        ancilla_register,
-        name=f"Mult({a})_Mod({N})",
-    )
-
-    # controlled add/subtract N
-    add_N_gate = draper_adder(N, n + 1).to_gate(label=f"add_{N}").control(1)
-    add_N_gate_inv = (
-        draper_adder(N, n + 1).inverse().to_gate(label=f"sub_{N}").control(1)
-    )
-
-    # deal with case when x > N
-    # using the ancilla before last as extra precision for addition and
-    # last ancilla to keep track if need to disable control
-    mod_mult_circ.compose(
-        add_N_gate_inv, [0] + list(range(1, n + 1)) + [2 * n + 3], inplace=True
-    )
-    mod_mult_circ.cx(0, 2 * n + 3)
-    mod_mult_circ.ccx(0, 2 * n + 3, 2 * n + 4)
-    mod_mult_circ.cx(0, 2 * n + 3)
-    mod_mult_circ.compose(
-        add_N_gate, [0] + list(range(1, n + 1)) + [2 * n + 3], inplace=True
-    )
-    mod_mult_circ.cx(2 * n + 4, 0)
-
-    # do the actual work, when needed, by calling modular_mult
-    mod_mult_circ.compose(modular_mult(a, N), list(range(2 * n + 3)), inplace=True)
-
-    # return the second ancilla to its original state
-    mod_mult_circ.cx(2 * n + 4, 0)
-    mod_mult_circ.compose(
-        add_N_gate_inv, [0] + list(range(1, n + 1)) + [2 * n + 3], inplace=True
-    )
-    mod_mult_circ.cx(0, 2 * n + 3)
-    mod_mult_circ.ccx(0, 2 * n + 3, 2 * n + 4)
-    mod_mult_circ.cx(0, 2 * n + 3)
-    mod_mult_circ.compose(
-        add_N_gate, [0] + list(range(1, n + 1)) + [2 * n + 3], inplace=True
-    )
-
-    return mod_mult_circ
-```
-
-Let's write a test function to perform tests:
-
-```{code-cell} ipython3
-def test_modular_mult_cond(a, N, b, x, c):
-
-    n = int(np.ceil(np.log2(N)))
-
-    control_register = QuantumRegister(size=1, name="c")
-    quantum_register = QuantumRegister(size=n, name="x")
-    adder_register = QuantumRegister(size=n + 2, name="b")
-    ancilla_register = QuantumRegister(size=2, name="l")
-
-    mod_mult_circ = QuantumCircuit(
-        control_register,
-        quantum_register,
-        adder_register,
-        ancilla_register,
-        name=f"Mult({a})_Mod({N})",
-    )
-    if c != 0:
-        mod_mult_circ.x(0)  # make sure it runs at this stage
-
-    mod_mult_circ.compose(set_state(x, n), quantum_register, inplace=True)
-
-    if b != 0:
-        mod_mult_circ.compose(set_state(b, n + 2), adder_register, inplace=True)
-
-    mod_mult_circ.compose(modular_mult_cond(a, N), inplace=True)
-
-    psi = Statevector(mod_mult_circ)
-    res = state_to_int(psi)
-
-    if c == 1 and x < N:
-        return (res - (1 + 2 * x)) // 2 ** (n + 1) == (b + a * x) % N
-
-    return res == c + 2 * x + 2 ** (n + 1) * b
-```
-
-Let's test it, first with $c=1$ and $x < N$:
-
-```{code-cell} ipython3
-a = 4
-N = 6
-
-b = 5
-x = 2
-
-c = 1
-
-test_modular_mult_cond(a, N, b, x, c)
-```
-
-Now with $c=1$ but $x \geq N$:
-
-```{code-cell} ipython3
-a = 4
-N = 6
-
-b = 5
-x = 7
-
-c = 1
-
-test_modular_mult_cond(a, N, b, x, c)
-```
-
-Now with $c=0$ and $x < N$:
-
-```{code-cell} ipython3
-a = 4
-N = 6
-
-b = 5
-x = 2
-
-c = 0
-
-test_modular_mult_cond(a, N, b, x, c)
-```
-
-Finally, with $c=0$ and $x \geq N$:
-
-```{code-cell} ipython3
-a = 4
-N = 6
-
-b = 5
-x = 7
-
-c = 0
-
-test_modular_mult_cond(a, N, b, x, c)
-```
-
 ## Oracle for Shor's Algorithm
 
 +++
@@ -863,6 +657,19 @@ $$
 where $n = \lceil \log_2(N) \rceil$.
 
 The "heavy lifting", of course, is done by `modular_mult` above.  The idea is to just use swaps to move the result to the last $n$ qubits, and make sure that $U_a$ acts as the identity if $x \geq N$.
+
++++
+
+We will start with a slightly different version:
+
+$$
+\left| c \right\rangle_1 \left| x \right\rangle_n \mapsto \begin{cases}
+  \left| c \right\rangle_1 \left| ax \; \mathrm{mod} N \right\rangle_n, & \text{if $c=1$}, \\
+  \left| c \right\rangle_1 \left| x \right\rangle_n, & \text{otherwise.}
+\end{cases}
+$$
+
+Below we introduce the condition on $x$.
 
 +++
 
@@ -888,10 +695,6 @@ def cswap():
 ```{code-cell} ipython3
 cswap().draw("mpl")
 ```
-
-Here is an implementation that does not require to classically compute inverses modulo $N$, but *leaves garbage in the ancilla*.  In order to leave the input unchanged when $x \geq N$, as required, we need an extra qubit in the ancilla.  (So, the ancilla has $n+3$ qubits, where $n = \lceil \log_2(N) \rceil$.)
-
-+++
 
 If we don't want garbage in our ancilla, we need to be able to invert integers modulo $N$.  Here is an implementation of the extended Euclidean algorithm:
 
@@ -920,9 +723,29 @@ def modular_inverse(a, N):
     return u1 % N
 ```
 
-```{code-cell} ipython3
-def shors_oracle_gate(a, N):
+Here is the implementation of this preliminary version:
 
+```{code-cell} ipython3
+def shors_oracle_prelim(a, N):
+    """
+    Given positive integers a and N, with a < N, returns a controlled modular
+    multiplier gate that takes
+       |c> |x>_n |0>_n+2 to  |c> |ax mod N>_n |0>_n+2,
+    if c = 1 and
+       |c> |x>_n |0>_n+2 to  |c>|x>_n |0>_n+2,
+    otherwise, where n = ceil(log2(N)).
+
+    INPUTS:
+    * a: the number to be multiplied;
+    * N: the modulus.
+
+    OUTPUT:
+    A controlled modular multiplier gate that takes
+       |c> |x>_n |0>_n+2 to  |c> |ax mod N>_n |0>_n+2,
+    if c = 1 and
+       |c> |x>_n |0>_n+2 to  |c>|x>_n |0>_n+2,
+    otherwise, where n = ceil(log2(N)).
+    """
     n = int(np.ceil(np.log2(N)))
 
     control_register = QuantumRegister(size=1, name="c")
@@ -947,14 +770,37 @@ def shors_oracle_gate(a, N):
     return oracle
 ```
 
+### Restriction on $x$
+
++++
+
+To attain our actual goal, we will slightly modify the `shors_oracle_prelim`.  We need to introduce a way to flip the control qubit when $x \geq N$.
+
++++
+
+The main idea here is, again, that if $x > N$ if and only if the most significant of $\left| x - N \right\rangle_{n+1}$ is zero, as stated in a previous lemma.
+The procedure will be:
+
+1) If the control $c$ is $1$, copy $x$ to the first $n$ qubits of the ancilla (using $CX$ gates).
+2) If the control $c$ is $1$, we subtract $N$ from the first $n+1$ qubits of the ancilla.
+3) If $c = 1$, we flip the $(n+1)$-st qubit of the ancilla.
+4) If both $c$ and the $(n+1)$-st qubit of the ancilla are $1$, then we flip the last (i.e., $(n+2)$-nd) qubit of the ancilla.
+5) If $c = 1$, we flip the $(n+1)$-st qubit of the ancilla.  At this point, qubit is back to its state after subtracting $N$, so we are back at $ \left| x - N \right\rangle_{n+1}$.
+6) If the control $c$ is $1$, we add $N$ to get $ \left| x \right\rangle_{n} \left| 0 \right\rangle$ back.
+7) We then use $CX$ gates (controlled on the first $n$ qubits) to set the first $n$ qubits of the anciall back to $0$.  So, at this point we have the original state, except that the last qubit of the ancilla is $1$ if $x > N$ and $0$ otherwise.
+8) If this last qubit of the ancilla is $1$, we flip the control.  This only happens if we started with $c=1$ and had $x > N$.  So, flipping, in this case, will set $c=0$.
+9) Now we call `shors_oracle_prelim`.  If $c=0$, then it will not do anything.  So, in particular, if $c=1$, but $x > N$, nothing will be done.  At the end of this step, we get the desired result, except that the last qubit of the ancilla might be flipped to $1$.
+10) If the last qubit of the ancilla is one, we flip $c$.  This only happens if $c$ was flipped already, and will return it to its original state (which would be $1$, in this case).
+11) Now we repeat steps 2 to 7.  This will reset the second ancilla when necessary, leaving the rest unchanged.
+
 ```{code-cell} ipython3
-def shors_oracle_cond(a, N):
+def shors_oracle(a, N):
     """
     Given positive integers a and N, with a < N, returns a controlled modular
     multiplier gate that takes
-       |c> |x>_n |b>_n+1 |0>_2  to  |c> |x>_n |ax + b mod N>_n+1 |0>_2,
+       |c> |x>_n |0>_n+2 to  |c> |ax mod N>_n |0>_n+2,
     if c = 1 and x < N and
-       |c> |x>_n |b>_n+1 |0>_2  to  |c> |x>_n |b>_n+1 |0>_2,
+       |c> |x>_n |0>_n+2 to  |c>|x>_n |0>_n+2,
     otherwise, where n = ceil(log2(N)).
 
     INPUTS:
@@ -963,9 +809,9 @@ def shors_oracle_cond(a, N):
 
     OUTPUT:
     A controlled modular multiplier gate that takes
-       |c> |x>_n |b>_n+1 |0>_2  to  |c> |x>_n |ax + b mod N>_n+1 |0>_2,
+       c> |x>_n |0>_n+2 to  |c> |ax mod N>_n |0>_n+2,
     if c = 1 and x < N and
-       |c> |x>_n |b>_n+1 |0>_2  to  |c> |x>_n |b>_n+1 |0>_2,
+       |c> |x>_n |0>_n+2 to  |c>|x>_n |0>_n+2,
     otherwise, where n = ceil(log2(N)).
     """
     n = int(np.ceil(np.log2(N)))
@@ -1008,7 +854,7 @@ def shors_oracle_cond(a, N):
         oracle.ccx(0, i + 1, n + 1 + i)
 
     # do the actual work, when needed, by calling shors_oracle_gate
-    oracle.compose(shors_oracle_gate(a, N), list(range(2 * n + 3)), inplace=True)
+    oracle.compose(shors_oracle_prelim(a, N), list(range(2 * n + 3)), inplace=True)
 
     # return the last ancilla to its original state
     for i in range(n):
@@ -1029,65 +875,6 @@ def shors_oracle_cond(a, N):
         oracle.ccx(0, i + 1, n + 1 + i)
 
     return oracle
-```
-
-```{code-cell} ipython3
-# garbage in ancilla
-# def shors_oracle_gate(a, N):
-#     """
-#     Given positive integers a and N, with a < N, returns a controlled modular
-#     multiplier gate that takes
-#        |1> |x>_n   to  |1> |ax mod N>_n,
-#     where n = ceil(log2(N)).
-
-#     INPUTS:
-#     * a: the number to be multiplied;
-#     * N: the modulus.
-
-#     OUTPUT:
-#     A controlled modular multiplier gate that takes
-#        |1> |x>_n  to  |1> |ax mod N>_n,
-#     where n = ceil(log2(N)).
-#     """
-#     n = int(np.ceil(np.log2(N)))
-
-#     control_register = QuantumRegister(size=1, name="c")
-#     quantum_register = QuantumRegister(size=n, name="x")
-#     ancilla = QuantumRegister(size=n + 3, name="b")
-
-#     oracle = QuantumCircuit(
-#         control_register, quantum_register, ancilla, name=f"Mult({a})_Mod({N})"
-#     )
-
-#     # controlled add/subtract N
-#     add_N_gate = draper_adder(N, n + 1).to_gate(label=f"add_{N}").control(1)
-#     add_N_gate_inv = (
-#         draper_adder(N, n + 1).inverse().to_gate(label=f"sub_{N}").control(1)
-#     )
-
-#     # deal with case when x > N
-#     # using the ancilla before last as extra precision for addition and
-#     # last ancilla to keep track if need to disable control
-#     oracle.compose(
-#         add_N_gate_inv, [0] + list(range(1, n + 1)) + [2 * n + 2], inplace=True
-#     )
-#     oracle.cx(0, 2 * n + 2)
-#     oracle.ccx(0, 2 * n + 2, 2 * n + 3)
-#     oracle.cx(0, 2 * n + 2)
-#     oracle.compose(add_N_gate, [0] + list(range(1, n + 1)) + [2 * n + 2], inplace=True)
-#     oracle.cx(2 * n + 3, 0)
-
-#     mod_mult_a_N = modular_mult(a, N)
-
-#     oracle.compose(mod_mult_a_N, inplace=True)
-#     for i in range(n):
-#         # oracle.cswap(0, i + 1, n + i + 1)
-#         oracle.compose(cswap(), [0, i + 1, n + i + 1], inplace=True)
-
-#     # reset the control qubit if necessary
-#     oracle.cx(2 * n + 3, 0)
-
-#     return oracle
 ```
 
 To make sure the code works, we will run various test, so let's write a function for that.
@@ -1120,7 +907,7 @@ def test_oracle(a, N, c, x):
 
     oracle.compose(set_state(x, n), quantum_register, inplace=True)
 
-    oracle.compose(shors_oracle_cond(a, N), inplace=True)
+    oracle.compose(shors_oracle(a, N), inplace=True)
 
     psi = Statevector(oracle)
 
@@ -1131,48 +918,6 @@ def test_oracle(a, N, c, x):
         return res == c + 2 * x
 
     return (res - 1) // 2 == (a * x) % N
-```
-
-```{code-cell} ipython3
-# control = 0, x < N
-a = 7
-N = 15
-
-c = 0
-x = 10
-
-n = int(np.ceil(np.log2(N)))
-
-control_register = QuantumRegister(size=1, name="c")
-quantum_register = QuantumRegister(size=n, name="x")
-ancilla = QuantumRegister(size=n + 2, name="b")
-
-oracle = QuantumCircuit(control_register, quantum_register, ancilla)
-
-if c != 0:
-    oracle.x(0)
-
-oracle.compose(set_state(x, n), quantum_register, inplace=True)
-
-oracle.compose(shors_oracle_cond(a, N), inplace=True)
-
-psi = Statevector(oracle)
-
-res = state_to_int(psi) 
-
-if c == 0 or (x >= N):
-    # we should get the initial state
-    print(res == c + 2 * x)
-else:
-    print((res - 1) // 2 == (a * x) % N)
-```
-
-```{code-cell} ipython3
-res
-```
-
-```{code-cell} ipython3
-c + 2 * x
 ```
 
 A few manual initial tests:
@@ -1219,62 +964,6 @@ c = 1
 x = 22
 
 test_oracle(a, N, c, x)
-```
-
-```{code-cell} ipython3
-a = 1
-N = 6
-
-c = 1
-x = 7
-
-n = int(np.ceil(np.log2(N)))
-control_register = QuantumRegister(size=1, name="c")
-quantum_register = QuantumRegister(size=n, name="x")
-ancilla = QuantumRegister(size=n + 4, name="b")
-
-oracle = QuantumCircuit(control_register, quantum_register, ancilla)
-
-if c != 0:
-    oracle.x(0)
-
-oracle.compose(set_state(x, n), quantum_register, inplace=True)
-
-mod_mult_a_N = modular_mult_cond(a, N)
-
-
-oracle.compose(mod_mult_a_N, inplace=True)
-# for i in range(n):
-#     # oracle.cswap(0, i + 1, n + i + 1)
-#     oracle.compose(cswap(), [0, i + 1, n + i + 1], inplace=True)
-
-# b = modular_inverse(a, N)
-# oracle.compose(modular_mult_cond(b, N).inverse(), inplace=True)
-
-# oracle.compose(shors_oracle_gate(a, N), inplace=True)
-
-psi = Statevector(oracle)
-
-# drop the ancillas
-res = state_to_int(psi)
-
-res == c + 2 * x
-```
-
-```{code-cell} ipython3
-res
-```
-
-```{code-cell} ipython3
-c + 2 * x
-```
-
-```{code-cell} ipython3
-binary_digits(res, 2 * n + 4)
-```
-
-```{code-cell} ipython3
-n
 ```
 
 Now, let's run various tests, using random numbers.  (These might take a while.)
