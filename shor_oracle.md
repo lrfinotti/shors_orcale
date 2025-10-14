@@ -876,11 +876,22 @@ The procedure will be:
 4) If both $c$ and the $(n+1)$-st qubit of the ancilla are $1$, then we flip the last (i.e., $(n+2)$-nd) qubit of the ancilla.
 5) If $c = 1$, we flip the $(n+1)$-st qubit of the ancilla.  At this point, qubit is back to its state after subtracting $N$, so we are back at $ \left| x - N \right\rangle_{n+1}$.
 6) If the control $c$ is $1$, we add $N$ to get $ \left| x \right\rangle_{n} \left| 0 \right\rangle$ back.
-7) We then use $CX$ gates (controlled on the first $n$ qubits) to set the first $n$ qubits of the anciall back to $0$.  So, at this point we have the original state, except that the last qubit of the ancilla is $1$ if $x > N$ and $0$ otherwise.
-8) If this last qubit of the ancilla is $1$, we flip the control.  This only happens if we started with $c=1$ and had $x > N$.  So, flipping, in this case, will set $c=0$.
-9) Now we call `shors_oracle_prelim`.  If $c=0$, then it will not do anything.  So, in particular, if $c=1$, but $x > N$, nothing will be done.  At the end of this step, we get the desired result, except that the last qubit of the ancilla might be flipped to $1$.
-10) If the last qubit of the ancilla is one, we flip $c$.  This only happens if $c$ was flipped already, and will return it to its original state (which would be $1$, in this case).
-11) Now we repeat steps 2 to 7.  This will reset the second ancilla when necessary, leaving the rest unchanged.
+7) If the last qubit of the ancilla is $1$, we flip the control, deactivating it.
+8) We then use $CX$ gates (controlled on the first $n$ qubits) to set the first $n$ qubits of the ancilla back to $\left|0 \right\rangle_n$.  So, at this point we have the original state, except that the last qubit of the ancilla is $1$ if $x > N$ and $0$ otherwise.
+9) If this last qubit of the ancilla is $1$, we flip the control.  This only happens if we started with $c=1$ and had $x > N$.  So, flipping, in this case, will set $c=0$.
+10) Now we call `shors_oracle_prelim`.  If $c=0$, then it will not do anything.  So, in particular, if $c=1$, but $x > N$, nothing will be done.  At the end of this step, we get the desired result, except that the last qubit of the ancilla might be flipped to $1$.
+11) If the last qubit of the ancilla is one, we flip $c$.  This only happens if $c$ was flipped already, and will return it to its original state (which would be $1$, in this case).
+12) Now we repeat steps 2 to 6 and 8.  This will reset the second ancilla when necessary, leaving the rest unchanged.
+
++++
+
+Here is a diagram of the first nine steps:
+
+<img src="circ_pre.png" alt="Pre shors_oracle_prelim" width="700"/>
+
+And here are the steps after applying `shors_oracle_prelim`:
+
+<img src="circ_post.png" alt="Pre shors_oracle_prelim" width="700"/>
 
 ```{code-cell} ipython3
 def shors_oracle(a, N):
