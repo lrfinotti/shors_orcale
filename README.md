@@ -1,6 +1,6 @@
-# Erdos Quantum Computing Mini Project 1
+# Implementation of Oracle for Shor's Algorithm
 
-## Implementation of Oracle for Shor's Algorithm
+## Description
 
 This is a mini project for the [Erdős Institute](https://www.erdosinstitute.org/)'s [Fall 2025 Quantum Computing Boot Camp](https://www.erdosinstitute.org/programs/fall-2025/quantum-computing-boot-camp).
 
