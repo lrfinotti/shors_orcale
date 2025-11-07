@@ -650,7 +650,7 @@ state_to_int(psi) == x * 2 + b * (2 ** (n + 1))
 
 +++
 
-Here is a version that does not use classical computation of $a \cdot 2^k$ modulo $N$.  We just need to compose modular adder gate of $a \cdot 2^k$ with itself to get the modular adder gate of $a \cdot 2^{k+1}$.
+Here is a version that does not use classical computation of $a \cdot 2^k$ modulo $N$.  We just need to compose modular adder gate of $a \cdot 2$ with itself to get the modular adder gate of $a \cdot 2^{k+1}$.
 
 ```{code-cell} ipython3
 def modular_mult_2(a, N):
@@ -682,7 +682,7 @@ def modular_mult_2(a, N):
     mod_mult_circ.compose(
         synth_qft_full(n + 1), list(range(n + 1, 2 * n + 2)), inplace=True
     )
-    
+
     # this will contain adder gates for a * 2**i
     add_power_2 = f_modular_adder(a, N)
 
@@ -850,7 +850,6 @@ def shors_oracle_prelim(a, N):
 
     oracle.compose(mod_mult_a_N, inplace=True)
     for i in range(n):
-        # oracle.cswap(0, i + 1, n + i + 1)
         oracle.compose(cswap(), [0, i + 1, n + i + 1], inplace=True)
 
     b = modular_inverse(a, N)
@@ -927,26 +926,21 @@ def shors_oracle(a, N):
     # copy x last n + 2
     for i in range(n):
         oracle.ccx(0, i + 1, n + 1 + i)
-    
-    
+
     # controlled add/subtract N
     add_N_gate = draper_adder(N, n + 1).to_gate(label=f"add_{N}").control(1)
     add_N_gate_inv = (
         draper_adder(N, n + 1).inverse().to_gate(label=f"sub_{N}").control(1)
     )
-    
+
     # deal with case when x > N
     # using the ancilla before last as extra precision for addition and
     # last ancilla to keep track if need to disable control
-    oracle.compose(
-        add_N_gate_inv, [0] + list(range(n + 1, 2 * n + 2)), inplace=True
-    )
+    oracle.compose(add_N_gate_inv, [0] + list(range(n + 1, 2 * n + 2)), inplace=True)
     oracle.cx(0, 2 * n + 1)
     oracle.ccx(0, 2 * n + 1, 2 * n + 2)
     oracle.cx(0, 2 * n + 1)
-    oracle.compose(
-        add_N_gate, [0] + list(range(n + 1, 2 * n + 2)), inplace=True
-    )
+    oracle.compose(add_N_gate, [0] + list(range(n + 1, 2 * n + 2)), inplace=True)
     oracle.cx(2 * n + 2, 0)
 
     # restore b to zero
@@ -959,17 +953,13 @@ def shors_oracle(a, N):
     # return the last ancilla to its original state
     for i in range(n):
         oracle.ccx(0, i + 1, n + 1 + i)
-    
+
     oracle.cx(2 * n + 2, 0)
-    oracle.compose(
-        add_N_gate_inv, [0] + list(range(n + 1, 2 * n + 2)), inplace=True
-    )
+    oracle.compose(add_N_gate_inv, [0] + list(range(n + 1, 2 * n + 2)), inplace=True)
     oracle.cx(0, 2 * n + 1)
     oracle.ccx(0, 2 * n + 1, 2 * n + 2)
     oracle.cx(0, 2 * n + 1)
-    oracle.compose(
-        add_N_gate, [0] + list(range(n + 1, 2 * n + 2)), inplace=True
-    )
+    oracle.compose(add_N_gate, [0] + list(range(n + 1, 2 * n + 2)), inplace=True)
 
     for i in range(n):
         oracle.ccx(0, i + 1, n + 1 + i)
@@ -1011,7 +1001,7 @@ def test_oracle(a, N, c, x):
 
     psi = Statevector(oracle)
 
-    res = state_to_int(psi) 
+    res = state_to_int(psi)
 
     if c == 0 or (x >= N):
         # we should get the initial state
